@@ -1,0 +1,179 @@
+---
+title: "Data Science Capstone Milestone Project"
+author: "Kehinde Usman"
+date: "9/7/2019"
+output: html_document
+---
+
+### Executive Summary
+The aim of this capstone project is to explain how we perform exploratory data analysis on the dataset we got from https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip and summarizes our plans for creating prediction algorithm.
+
+### Getting and Cleaning Data
+The data has been downloaded using the above link to my local storage. For this project, we will only use the English - United States data sets. We will read and save the en_US.twitter.txt to twitter, en_US.news.txt to news and en_US.blogs.txt to blogs. 
+```{r read}
+library(knitr)
+twitter <- readLines("en_US.twitter.txt",warn = FALSE, encoding = "UTF-8")
+news <- readLines("en_US.news.txt",warn = FALSE, encoding = "UTF-8")
+blogs <- readLines("en_US.blogs.txt",warn = FALSE, encoding = "UTF-8")
+
+```
+We will use the string function to get the words in each files.
+```{r stringfunction}
+library(stringi)
+wc_twitter <-stri_stats_latex(twitter)[4]
+wc_news <-stri_stats_latex(news)[4]
+wc_blogs <-stri_stats_latex(blogs)[4]
+
+```
+The next step of action is to give the summary of the dataset by knowing the line counts, word counts and character counts.
+```{r summary}
+data.frame("Names" = c("twitter", "news", "blogs"),
+           "line_count" = c(length(twitter), length(news), length(blogs)),
+           "word_count" = c(sum(wc_twitter), sum(wc_news), sum(wc_blogs)),
+           "character_count" = c(sum(nchar(twitter)),sum(nchar(news)), sum(nchar(blogs)))
+)
+
+```
+We use iconv to convert a character vector between encodings
+```{r iconv}
+set.seed(10000)
+twitter_con<-iconv(twitter,"latin1","ASCII",sub="")
+blogs_con<-iconv(blogs,"latin1","ASCII",sub="")
+news_con<-iconv(news,"latin1","ASCII",sub="")
+
+```
+We have a large data set, we can't use all of it. We want to take some samples from the data and use it for our analysis.
+```{r sampledata}
+sampledata<-c(sample(twitter_con,length(twitter_con)*0.01),
+              sample(blogs_con,length(blogs_con)*0.01),
+               sample(news_con,length(news_con)*0.01))
+
+```
+Before we move to exploratory analysis, we have to clean our sample data. 
+```{r cleaning}
+# Load libraries
+library(tm)
+library(NLP)
+     
+# Use volatile corpus to intepret sampledata to docs
+docs <- VCorpus(VectorSource(sampledata))
+# Use preprocessing functions to clean
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "(f|ht)tp(s?)://(.*)[.][a-z]+")
+docs <- tm_map(docs, toSpace, "@[^\\s]+")
+docs <- tm_map(docs, tolower)
+docs <- tm_map(docs, removeWords, stopwords("en"))
+docs <- tm_map(docs, removePunctuation)
+docs <- tm_map(docs, removeNumbers)
+docs <- tm_map(docs, stripWhitespace)
+docs <- tm_map(docs, PlainTextDocument)
+
+```
+### Exploratory Data Analysis
+Performing analysis on our unigram dataset
+```{r analysis}
+# Load libraries
+library(RWeka)
+library(ggplot2)
+
+# Create Ngram tokenizer for unigram
+unigram <-function(x) NGramTokenizer(x,Weka_control(min=1,max=1))
+
+# Create tdm from docs for unigram
+tdm_unigram <-TermDocumentMatrix(docs,control=list(tokenize=unigram))
+
+# Find frequent terms in tdm_unigram for a lower frequency bound of 1000
+freq_unigram <-findFreqTerms(tdm_unigram,lowfreq=1000)
+
+# Convert tdm_unigram to a matrix and get the sum of the row using freq_unigram
+rs_unigram <-rowSums(as.matrix(tdm_unigram[freq_unigram,]))
+
+# Put rs_unigram in a data frame
+df_unigram <-data.frame(Word=names(rs_unigram),freq=rs_unigram)
+
+# Sort the df_unigram by frequency
+st_unigram <-df_unigram[order(-df_unigram$freq),]
+
+saveRDS(df_unigram, "unigram.RData")
+# Examine df_unigram
+head(df_unigram)
+
+```
+This shows the result of our unigram analysis
+```{r unigram_plot}
+ggplot(st_unigram[1:20,],aes(x=reorder(Word,-freq),y=freq))+
+geom_bar(stat="identity",fill = "blue")+
+ggtitle("Most Frequent Occuring Unigram Words")+ xlab("Unigram Words") + ylab("Frequency")+
+theme(axis.text.x=element_text(angle=60 ))
+
+```
+
+ Performing analysis on our bigram dataset
+```{r analysis_bigram}
+# Create Ngram tokenizer for bigram
+bigram <-function(x) NGramTokenizer(x,Weka_control(min=2,max=2))
+
+# Create tdm from docs for bigram
+tdm_bigram <-TermDocumentMatrix(docs,control=list(tokenize=bigram))
+
+# Find frequent terms in tdm_bigram for a lower frequency bound of 80
+freq_bigram <-findFreqTerms(tdm_bigram,lowfreq=80)
+
+# Convert tdm_bigram to a matrix and get the sum of the row using freq_bigram
+rs_bigram <-rowSums(as.matrix(tdm_bigram[freq_bigram,]))
+
+# Put rs_bigram in a data frame
+df_bigram <-data.frame(Word=names(rs_bigram),freq=rs_bigram)
+
+# Sort the df_bigram by frequency
+st_bigram <-df_bigram[order(-df_bigram$freq),]
+
+saveRDS(df_bigram, "bigram.RData")
+# Examine df_bigram
+head(df_bigram)
+```
+This shows the result of our bigram analysis
+```{r bigram_plot}
+ggplot(st_bigram[1:10,],aes(x=reorder(Word,-freq),y=freq))+
+geom_bar(stat="identity",fill = "blue")+
+ggtitle("Most Frequent Occuring Bigram Words")+ xlab("Bigram Words") + ylab("Frequency")+
+theme(axis.text.x=element_text(angle=60))
+```
+
+Performing analysis on our trigram dataset
+```{r analysis_trigram}
+# Create Ngram tokenizer for trigram
+trigram <-function(x) NGramTokenizer(x,Weka_control(min=3,max=3))
+
+# Create tdm from docs for trigram
+tdm_trigram <-TermDocumentMatrix(docs,control=list(tokenize=trigram))
+
+# Find frequent terms in tdm_trigram for a lower frequency bound of 10
+freq_trigram <-findFreqTerms(tdm_trigram,lowfreq=10)
+
+# Convert tdm_trigram to a matrix and get the sum of the row using freq_trigram
+rs_trigram <-rowSums(as.matrix(tdm_trigram[freq_trigram,]))
+
+# Put rs_trigram in a data frame
+df_trigram <-data.frame(Word=names(rs_trigram),freq=rs_trigram)
+
+# Sort the df_trigram by frequency
+st_trigram <-df_trigram[order(-df_trigram$freq),]
+
+saveRDS(df_trigram, "trigram.RData")
+# Examine df_trigram
+head(df_trigram)
+```
+This shows the result of our trigram analysis
+```{r trigram_plot}
+ggplot(st_trigram[1:10,],aes(x=reorder(Word,-freq),y=freq))+
+geom_bar(stat="identity",fill = "blue")+
+ggtitle("Most Frequent Occuring Trigram Words")+ xlab("Trigram Words") + ylab("Frequency")+
+theme(axis.text.x=element_text(angle=60))
+
+```
+
+### Plans for Prediction Algorithm and Shiny Apps
+After completing our exploratory analysis, the next point of action is to create a prediction algorithm and deploy our solution using shiny app.
+
+Our prediction model will give list of suggested word by making use of the ngram models to update the next word. A simple user interface will be created allows users to type inside a text box and get suggested next words. 
