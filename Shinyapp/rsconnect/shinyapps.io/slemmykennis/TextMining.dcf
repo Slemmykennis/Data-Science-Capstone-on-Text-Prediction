@@ -1,0 +1,12 @@
+name: TextMining
+title: TextMining
+username:
+account: slemmykennis
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1227932
+bundleId: 2435414
+url: https://slemmykennis.shinyapps.io/TextMining/
+when: 1569194578.09559
+asMultiple: FALSE
+asStatic: FALSE
